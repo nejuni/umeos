@@ -1,0 +1,145 @@
+name: Build & Release umeos APKs
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Optional release tag, for example v1.2.0'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          java-version: '17'
+          distribution: temurin
+
+      - name: Set up Gradle 9.9.1
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.9.1'
+
+      - name: Resolve version
+        id: version
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${INPUT_TAG:-}"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then tag="$GITHUB_REF_NAME"; fi
+          if [ -n "$tag" ]; then
+            if [[ ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+              echo "::error::Release tags must use vMAJOR.MINOR.PATCH, e.g. v1.2.0."
+              exit 1
+            fi
+            major="${BASH_REMATCH[1]}"
+            minor="${BASH_REMATCH[2]}"
+            patch="${BASH_REMATCH[3]}"
+            if (( minor > 999 || patch > 999 || ${#major} > 4 )); then
+              echo "::error::Version tag is outside the supported versionCode range: $tag"
+              exit 1
+            fi
+            name="${tag#v}"
+            code=$((1000000 + major * 1000000 + minor * 1000 + patch))
+            if (( code > 2100000000 )); then
+              echo "::error::Version tag exceeds Android's versionCode limit: $tag"
+              exit 1
+            fi
+          else
+            name='1.0-dev'
+            code=999999
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          {
+            echo '## Android APK build'
+            echo "- Version: \`$name\` (code \`$code\`)"
+            echo '- APKs: arm64-v8a, armeabi-v7a, universal'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Restore release signing key
+        env:
+          KS_B64: ${{ secrets.KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KS_KEYPASS: ${{ secrets.KEY_PASSWORD }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$KS_B64" ]; then
+            ks="$RUNNER_TEMP/memos-release.jks"
+            echo "$KS_B64" | base64 -d > "$ks"
+            {
+              echo "KEYSTORE_PATH=$ks"
+              echo "KEYSTORE_PASSWORD=$KS_PASS"
+              echo "KEY_ALIAS=$KS_ALIAS"
+              echo "KEY_PASSWORD=${KS_KEYPASS:-$KS_PASS}"
+            } >> "$GITHUB_ENV"
+          elif [ -n "$RELEASE_TAG" ]; then
+            echo '::error::Configure KEYSTORE_BASE64, KEYSTORE_PASSWORD and KEY_ALIAS repository secrets before publishing releases.'
+            exit 1
+          else
+            echo 'No release key configured; this build will use the debug signing key.'
+          fi
+
+      - name: Build arm64, armeabi-v7a and universal APKs
+        run: |
+          gradle :app:assembleRelease --no-daemon --console=plain \
+            "-PappVersionName=${{ steps.version.outputs.name }}" \
+            "-PappVersionCode=${{ steps.version.outputs.code }}"
+
+      - name: Collect APKs
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for abi in arm64-v8a armeabi-v7a universal; do
+            src="app/build/outputs/apk/release/app-${abi}-release.apk"
+            test -f "$src" || { echo "Missing expected APK: $src"; exit 1; }
+            cp "$src" "dist/umeos-v${VERSION_NAME}-${abi}.apk"
+          done
+          ls -lh dist
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: umeos-v${{ steps.version.outputs.name }}-apks
+          path: dist/*.apk
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: steps.version.outputs.tag != ''
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: umeos ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          make_latest: true
+          files: dist/*.apk
+          fail_on_unmatched_files: true
