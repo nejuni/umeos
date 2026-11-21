@@ -1,4 +1,4 @@
-package com.mds.io
+package com.nejuni.umeos
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme

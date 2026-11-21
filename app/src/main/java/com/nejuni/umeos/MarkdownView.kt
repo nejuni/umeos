@@ -1,4 +1,4 @@
-package com.mds.io
+package com.nejuni.umeos
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border

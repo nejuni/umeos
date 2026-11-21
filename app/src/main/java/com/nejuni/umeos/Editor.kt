@@ -1,6 +1,4 @@
-package com.mds.io
-
-import com.nejuni.umeos.R
+package com.nejuni.umeos
 
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background

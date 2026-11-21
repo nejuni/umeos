@@ -54,13 +54,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import com.mds.io.EditorView
-import com.mds.io.FormatBar
-import com.mds.io.G
-import com.mds.io.GruvboxTheme
-import com.mds.io.Markdown
-import com.mds.io.MarkdownPreview
-import com.mds.io.Block
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -308,6 +301,7 @@ private suspend fun syncPending(api: MemosApi, store: OfflineMemoStore) {
     var localMode by remember { mutableStateOf(settings.isLocalMode()) }
     var base by remember { mutableStateOf(saved.first.ifBlank { "http://localhost:5230/" }) }
     var pat by remember { mutableStateOf(saved.second) }
+    var rememberedPat by remember { mutableStateOf(saved.second) }
     var user by remember { mutableStateOf<User?>(null) }
     var memos by remember { mutableStateOf<List<Memo>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
@@ -411,6 +405,7 @@ private suspend fun syncPending(api: MemosApi, store: OfflineMemoStore) {
                 onBase = { base = it },
                 pat = pat,
                 onPat = { pat = it },
+                hasSavedToken = rememberedPat.isNotBlank(),
                 busy = busy,
                 error = error,
                 onLocal = {
@@ -426,10 +421,11 @@ private suspend fun syncPending(api: MemosApi, store: OfflineMemoStore) {
                 onConnect = {
                     run {
                         val cleanUrl = base.trim().trimEnd('/')
-                        val cleanPat = pat.trim()
+                        val cleanPat = pat.trim().ifBlank { rememberedPat }
                         val api = MemosApi(cleanUrl, cleanPat)
                         val verified = api.verify()
                         settings.save(cleanUrl, cleanPat)
+                        rememberedPat = cleanPat
                         settings.setDeferNetworkUntilRefresh(false)
                         base = cleanUrl
                         pat = cleanPat
@@ -443,7 +439,7 @@ private suspend fun syncPending(api: MemosApi, store: OfflineMemoStore) {
             )
             selected != null -> MemoEditorScreen(
                 draft = draft,
-                onDraft = { old, next -> draft = com.mds.io.Fmt.autoContinue(old, next) ?: next },
+                onDraft = { old, next -> draft = Fmt.autoContinue(old, next) ?: next },
                 editing = editing,
                 onToggle = { editing = !editing },
                 busy = busy,
@@ -573,10 +569,13 @@ private suspend fun syncPending(api: MemosApi, store: OfflineMemoStore) {
                     if (localMode || offlineMode) {
                         settings.setLocalMode(false)
                         localMode = false
+                        // Keep the saved token encrypted for reconnect, but never prefill it
+                        // into the password field after returning to the connection screen.
+                        pat = ""
                         user = null
                         error = ""
                     } else {
-                        settings.clear(); user = null; memos = emptyList(); searchQuery = ""; pat = ""; offlineMode = false
+                        settings.clear(); user = null; memos = emptyList(); searchQuery = ""; pat = ""; rememberedPat = ""; offlineMode = false
                     }
                 }
             )
@@ -589,6 +588,7 @@ private suspend fun syncPending(api: MemosApi, store: OfflineMemoStore) {
     onBase: (String) -> Unit,
     pat: String,
     onPat: (String) -> Unit,
+    hasSavedToken: Boolean,
     busy: Boolean,
     error: String,
     onLocal: () -> Unit,
@@ -598,8 +598,18 @@ private suspend fun syncPending(api: MemosApi, store: OfflineMemoStore) {
         Text("Connect to Memos", style = MaterialTheme.typography.headlineMedium, color = G.yellow)
         Text("Enter your server URL and Personal Access Token.", color = G.fg4)
         OutlinedTextField(base, onBase, label = { Text("Server URL") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(pat, onPat, label = { Text("Personal Access Token") }, visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
-        Button(enabled = !busy && base.isNotBlank() && pat.isNotBlank(), onClick = onConnect) { Text(if (busy) "Connecting…" else "Verify and connect") }
+        OutlinedTextField(
+            pat,
+            onPat,
+            label = { Text("Personal Access Token") },
+            placeholder = { Text("Change password") },
+            visualTransformation = PasswordVisualTransformation(),
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Button(enabled = !busy && base.isNotBlank() && (pat.isNotBlank() || hasSavedToken), onClick = onConnect) {
+            Text(if (busy) "Connecting…" else "Verify and connect")
+        }
         OutlinedButton(enabled = !busy, onClick = onLocal) { Text("Continue with local notes") }
         Text("Local notes are stored only in this app. When you sign in, notes up to 9 KiB will sync to Memos; larger notes stay on this device.", color = G.gray, style = MaterialTheme.typography.bodySmall)
         Text("Default: http://localhost:5230/. On an emulator reaching your computer, use http://10.0.2.2:5230. On a phone, use your server LAN URL or HTTPS.", color = G.gray, style = MaterialTheme.typography.bodySmall)
