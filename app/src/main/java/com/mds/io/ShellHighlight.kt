@@ -1,4 +1,4 @@
-package com.umeos.io
+package com.mds.io
 
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle

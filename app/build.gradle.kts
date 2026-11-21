@@ -9,11 +9,11 @@ val appVersionCode: Int = (project.findProperty("appVersionCode") as String?)?.t
 val releaseKeystore: String? = System.getenv("KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
 
 android {
-    namespace = "com.umeos.io"
+    namespace = "com.nejuni.umeos"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.umeos.io"
+        applicationId = "com.nejuni.umeos"
         minSdk = 26
         targetSdk = 36
         versionCode = appVersionCode

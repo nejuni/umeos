@@ -1,4 +1,4 @@
-package com.umeos.io
+package com.mds.io
 
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue

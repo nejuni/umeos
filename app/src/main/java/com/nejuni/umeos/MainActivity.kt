@@ -1,4 +1,4 @@
-package com.umeos.io
+package com.nejuni.umeos
 
 import android.os.Bundle
 import android.net.Uri
@@ -54,13 +54,13 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import com.umeos.io.EditorView
-import com.umeos.io.FormatBar
-import com.umeos.io.G
-import com.umeos.io.GruvboxTheme
-import com.umeos.io.Markdown
-import com.umeos.io.MarkdownPreview
-import com.umeos.io.Block
+import com.mds.io.EditorView
+import com.mds.io.FormatBar
+import com.mds.io.G
+import com.mds.io.GruvboxTheme
+import com.mds.io.Markdown
+import com.mds.io.MarkdownPreview
+import com.mds.io.Block
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -443,7 +443,7 @@ private suspend fun syncPending(api: MemosApi, store: OfflineMemoStore) {
             )
             selected != null -> MemoEditorScreen(
                 draft = draft,
-                onDraft = { old, next -> draft = com.umeos.io.Fmt.autoContinue(old, next) ?: next },
+                onDraft = { old, next -> draft = com.mds.io.Fmt.autoContinue(old, next) ?: next },
                 editing = editing,
                 onToggle = { editing = !editing },
                 busy = busy,

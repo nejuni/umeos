@@ -1,4 +1,4 @@
-package com.umeos.io
+package com.mds.io
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
